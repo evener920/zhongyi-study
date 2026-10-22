@@ -254,8 +254,17 @@ button{font-family:inherit;cursor:pointer}
 .gexpl{font-size:13px;color:var(--muted);min-height:18px;line-height:1.5}
 .gcard-foot{display:flex;gap:8px;margin-top:2px}
 .gcard-foot .mini-btn{flex:0 0 auto}
-.gplayer{margin-top:6px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:16/9}
-.gplayer iframe{width:100%;height:100%;border:0;display:block}
+/* 大屏播放器（点击卡片“播放”弹出，遮罩 + 居中 16:9，最大 1000px） */
+.gplayer-modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px}
+.gplayer-mask{position:absolute;inset:0;background:rgba(15,20,30,.6)}
+.gplayer-card{position:relative;background:#000;border-radius:16px;max-width:1000px;width:100%;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.gplayer-close{position:absolute;top:8px;right:10px;z-index:3;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:26px;line-height:1;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.gplayer-close:hover{background:rgba(255,255,255,.35)}
+.gplayer-title{position:absolute;top:10px;left:16px;z-index:3;color:#fff;font-weight:700;font-size:17px;text-shadow:0 1px 5px rgba(0,0,0,.7);pointer-events:none}
+.gplayer-frame{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+.gplayer-frame iframe{width:100%;height:100%;border:0;display:block}
+.gplayer-link{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;background:linear-gradient(135deg,#2a2f3a,#000)}
+.gplayer-link a{color:#fff;background:#fb7299;border-radius:10px;padding:11px 22px;font-weight:700;text-decoration:none;font-size:15px}
 .gallery-add{margin-top:14px;border:1px dashed var(--line);border-radius:14px;padding:14px;background:#fafbfe}
 .gallery-add .ga-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .gallery-add .ga-row label{flex:0 0 84px;font-size:13px;color:var(--muted);font-weight:600}

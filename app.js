@@ -827,7 +827,8 @@
   }
 
   document.querySelectorAll("[data-close]").forEach(el=> el.onclick = closeModal);
-  document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+  document.querySelectorAll("[data-gclose]").forEach(el=> el.onclick = closeGalleryPlayer);
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeModal(); closeGalleryPlayer(); } });
 
   /* ============ 统计 ============ */
   function renderStats(){
@@ -931,17 +932,6 @@
     const cards = idiomCards.concat(customCards);
 
     const cardHtml = (c)=>{
-      const emb = videoEmbed(c.url);
-      const playing = galleryOpen===c.id;
-      let player = "";
-      if(playing){
-        player = emb.type==="iframe"
-          ? `<div class="gplayer"><iframe src="${esc(withAutoplay(emb.src))}" allow="encrypted-media; picture-in-picture; autoplay" allowfullscreen></iframe></div>`
-          : `<a class="bili-btn" href="${esc(c.url)}" target="_blank" rel="noopener">▶ 打开视频（抖音 / 其他平台，不支持内嵌）</a>`;
-      }
-      const playBtn = playing
-        ? `<button class="mini-btn" data-act="close">收起</button>`
-        : `<button class="mini-btn" data-act="play">▶ 播放</button>`;
       const delBtn = c.kind==="custom"
         ? `<button class="mini-btn sv-del" data-act="del">删除</button>`
         : `<button class="mini-btn sv-del" data-act="unlink">移除视频</button>`;
@@ -950,9 +940,8 @@
         <div class="gexpl">${esc((c.explanation||"").slice(0,60))}</div>
         <div class="gcard-foot">
           <button class="mini-btn" data-act="speak">🔊</button>
-          ${playBtn}
+          <button class="mini-btn" data-act="play">▶ 播放</button>
         </div>
-        ${player}
       </div>`;
     };
 
@@ -1018,15 +1007,42 @@
 
     v.querySelectorAll(".gcard").forEach(cardEl=>{
       const id = cardEl.dataset.id;
+      const c = cards.find(x=>x.id===id);
       cardEl.querySelectorAll("[data-act]").forEach(b=> b.onclick = ()=>{
         const act=b.dataset.act;
-        if(act==="play"){ galleryOpen=id; renderGallery(); }
-        else if(act==="close"){ galleryOpen=null; renderGallery(); }
-        else if(act==="speak"){ const c=cards.find(x=>x.id===id); speak((c.word||"")+"。"+(c.explanation||""),"zh-CN"); }
-        else if(act==="del"){ const cid=cardEl.dataset.cid; state.gallery=state.gallery.filter(x=>String(x.id)!==String(cid)); save(); galleryOpen=null; toast("已删除卡片"); renderGallery(); }
-        else if(act==="unlink"){ delete state.videos[id]; save(); galleryOpen=null; toast("已移除该成语的视频"); renderGallery(); }
+        if(act==="play"){ openGalleryPlayer(c); }
+        else if(act==="speak"){ const cc=c||cards.find(x=>x.id===id); speak((cc.word||"")+"。"+(cc.explanation||""),"zh-CN"); }
+        else if(act==="del"){ const cid=cardEl.dataset.cid; state.gallery=state.gallery.filter(x=>String(x.id)!==String(cid)); save(); toast("已删除卡片"); renderGallery(); }
+        else if(act==="unlink"){ delete state.videos[id]; save(); toast("已移除该成语的视频"); renderGallery(); }
       });
     });
+  }
+
+  // 大屏播放器：点卡片“播放”弹出居中遮罩播放器（16:9，最大 1000px），一次只播一个
+  function openGalleryPlayer(c){
+    if(!c) return;
+    galleryOpen = c.id;
+    const emb = videoEmbed(c.url);
+    const titleEl = document.getElementById("gplayer-title");
+    const frameEl = document.getElementById("gplayer-frame");
+    if(titleEl) titleEl.textContent = c.word || "";
+    if(frameEl){
+      frameEl.classList.remove("gplayer-link-wrap");
+      if(emb.type==="iframe"){
+        frameEl.innerHTML = `<iframe src="${withAutoplay(emb.src)}" allow="encrypted-media;picture-in-picture;autoplay;fullscreen" allowfullscreen></iframe>`;
+      } else {
+        frameEl.innerHTML = `<div class="gplayer-link"><div>该平台暂不支持内嵌播放</div><a href="${esc(c.url)}" target="_blank" rel="noopener">▶ 点击在新窗口打开视频</a></div>`;
+      }
+    }
+    const m = document.getElementById("gplayer");
+    if(m){ m.hidden=false; document.body.style.overflow="hidden"; }
+  }
+  function closeGalleryPlayer(){
+    const m = document.getElementById("gplayer");
+    if(m){ m.hidden=true; document.body.style.overflow=""; }
+    const frameEl = document.getElementById("gplayer-frame");
+    if(frameEl){ frameEl.innerHTML=""; }
+    galleryOpen = null;
   }
 
   /* ============ 导航 ============ */

@@ -53,6 +53,16 @@
   <!-- 提示条 -->
   <div id="toast" class="toast" hidden></div>
 
+  <!-- 成语动画廊 · 大屏播放器（遮罩 + 居中 16:9，最大 1000px） -->
+  <div id="gplayer" class="gplayer-modal" hidden>
+    <div class="gplayer-mask" data-gclose></div>
+    <div class="gplayer-card">
+      <button class="gplayer-close" data-gclose aria-label="关闭">×</button>
+      <div class="gplayer-title" id="gplayer-title"></div>
+      <div class="gplayer-frame" id="gplayer-frame"></div>
+    </div>
+  </div>
+
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
