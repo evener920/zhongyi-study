@@ -5,6 +5,8 @@
   const REVIEW_GAPS = [1, 3, 7, 15, 30]; // 间隔复习：学会后第1/3/7/15/30天复习
   const STORE_KEY = "zhongyi_study_v1";
   const PER_PAGE = 24;
+  // 每日打卡的 5 项日常任务（房间卫生 / 学校作业 / 家庭语文 / 家庭英语 / 家庭数学）
+  const DAILY_TASKS = ["房间卫生","学校作业","家庭语文","家庭英语","家庭数学"];
 
   /* ---------- 状态 ---------- */
   function loadState(){
@@ -16,6 +18,7 @@
   state.items = state.items || {};
   state.videos = state.videos || {};
   state.gallery = state.gallery || []; // 成语动画廊：用户自添加的成语卡
+  state.dailyTasks = state.dailyTasks || {}; // 每日打卡任务：按日期记录每项是否完成
   state.settings = state.settings || { dailyGoal: 15 };
   // 首次访问（本地尚未自定义过）：用预设的《成语动画廊》180 集填充动画廊
   if(state.gallery.length===0 && !state._gallerySeeded){
@@ -44,13 +47,7 @@
   }
   function catOfKey(key){ return key.indexOf("poem")===0 ? "poems" : key.indexOf("word")===0 ? "words" : "idioms"; }
 
-  /* ---------- 打卡 ---------- */
-  function doCheckin(){
-    const t = today();
-    if(state.checkins[t]){ toast("今天已经打卡啦 🎉"); return; }
-    state.checkins[t] = 1; save(); renderHome();
-    toast("打卡成功，继续保持！🔥");
-  }
+  /* ---------- 打卡（连续天数，由每日任务全部完成驱动） ---------- */
   function streak(){
     let s=0; const d=new Date();
     if(!state.checkins[fmt(d)]) d.setDate(d.getDate()-1);
@@ -104,8 +101,9 @@
   }
   function todayPlan(){
     const goal = state.settings.dailyGoal;
-    const due = dueReviews();
-    const pool = unlearned();
+    const isIdiom = k => k.indexOf("idiom")===0;   // 首页学习计划不含成语
+    const due = dueReviews().filter(k=> !isIdiom(k));
+    const pool = unlearned().filter(x=> x.key.indexOf("idiom")!==0);
     const extra = pool.slice(0, Math.max(0, goal - due.length)).map(x=>x.key);
     return { due, extra };
   }
@@ -172,14 +170,18 @@
     };
 
     const v = document.getElementById("view-home");
+    const todayTasks = state.dailyTasks[t] || {};
+    const doneCount = DAILY_TASKS.filter(x=> todayTasks[x]).length;
+    const allDone = doneCount === DAILY_TASKS.length;
     v.innerHTML = `
       <div class="dash">
         <div>
           <div class="panel" style="margin-bottom:18px">
             <h3>📅 今日打卡</h3>
-            <button id="checkin-btn" class="checkin-btn ${state.checkins[t]?'done':''}">
-              ${state.checkins[t]?"✅ 今日已打卡":"点击打卡 · 今日 "+t}
-            </button>
+            <div class="daily-tasks">
+              ${DAILY_TASKS.map(t=>`<label class="dtask ${todayTasks[t]?'done':''}"><input type="checkbox" data-task="${esc(t)}" ${todayTasks[t]?'checked':''}> <span>${esc(t)}</span></label>`).join("")}
+            </div>
+            <div class="dtask-summary">今日完成 <b>${doneCount}/${DAILY_TASKS.length}</b> ${allDone?'· ✅ 今日已打卡，太棒了！':'· 还差 '+(DAILY_TASKS.length-doneCount)+' 项完成今日打卡'}</div>
             <div class="stat-row" style="margin-top:16px">
               <div class="stat"><div class="v" style="color:var(--brand)">🔥 ${s}</div><div class="k">连续打卡(天)</div></div>
               <div class="stat"><div class="v">⭐ ${learnedCount}</div><div class="k">已点亮星星</div></div>
@@ -188,7 +190,7 @@
             </div>
           </div>
           <div class="panel">
-            <h3>🎯 今日学习计划 <span style="font-size:12px;color:var(--muted);font-weight:400">（每日目标 ${state.settings.dailyGoal} 条）</span></h3>
+            <h3>🎯 今日学习计划 <span style="font-size:12px;color:var(--muted);font-weight:400">（每日目标 ${state.settings.dailyGoal} 条 · 不含成语）</span></h3>
             ${planHtml()}
           </div>
         </div>
@@ -203,13 +205,24 @@
           <div class="panel">
             <h3>🔥 打卡日历</h3>
             ${heatmap()}
-            <div class="legend">近 120 天打卡情况 · 蓝色为已打卡</div>
+            <div class="legend">近 120 天打卡情况 · 蓝色为已打卡（5 项全部完成才算当天打卡）</div>
           </div>
         </div>
       </div>`;
 
-    document.getElementById("checkin-btn").onclick = doCheckin;
+    v.querySelectorAll("input[data-task]").forEach(cb=> cb.onchange = ()=> setDailyTask(cb.dataset.task, cb.checked));
     v.querySelectorAll("[data-go]").forEach(b=> b.onclick = ()=> openPlanItem(b.dataset.go));
+  }
+
+  // 勾选/取消一项每日任务；5 项全部完成才算当天“打卡”（驱动连续打卡与日历）
+  function setDailyTask(task, val){
+    const t = today();
+    state.dailyTasks[t] = state.dailyTasks[t] || {};
+    if(val) state.dailyTasks[t][task] = 1; else delete state.dailyTasks[t][task];
+    const all = DAILY_TASKS.every(x=> state.dailyTasks[t][x]);
+    if(all){ state.checkins[t] = 1; toast("今日 5 项全部完成，打卡成功！🔥"); }
+    else { delete state.checkins[t]; if(val) toast("已记录：" + task); }
+    save(); renderHome();
   }
 
   function heatmap(){
@@ -842,6 +855,18 @@
           <div class="bar ${c.name[0]}"><i style="width:${(c.pct*100).toFixed(1)}%"></i></div>`).join("")}
       </div>
       <div class="panel" style="margin-top:18px">
+        <h3>✅ 每日打卡任务</h3>
+        <div class="row-between" style="margin-bottom:10px"><span>已完整打卡天数</span><span><b>${Object.keys(state.checkins).length}</b> 天（5 项全部完成）</span></div>
+        ${DAILY_TASKS.map(t=>{
+          const dates = Object.keys(state.dailyTasks);
+          const done = dates.reduce((a,d)=> a + (state.dailyTasks[d][t]?1:0), 0);
+          const pct = dates.length ? (done/dates.length*100) : 0;
+          return `<div class="row-between"><span>${esc(t)}</span><span>完成 ${done} 天</span></div>
+            <div class="bar w"><i style="width:${pct.toFixed(1)}%"></i></div>`;
+        }).join("")}
+        <div class="legend">统计基于本浏览器已记录的打卡日；换设备前请先导出进度。</div>
+      </div>
+      <div class="panel" style="margin-top:18px">
         <h3>🔥 打卡日历</h3>
         ${heatmap()}
         <div class="legend">近 120 天 · 蓝色为已打卡日</div>
@@ -862,7 +887,7 @@
     document.getElementById("import-file").onchange = e=>{ if(e.target.files[0]) importData(e.target.files[0]); };
     document.getElementById("reset-btn").onclick = ()=>{
       if(confirm("确定清空所有打卡与学习进度？此操作不可恢复。")){
-        state = { checkins:{}, items:{}, settings: state.settings };
+        state = { checkins:{}, items:{}, dailyTasks:{}, settings: state.settings };
         save(); toast("已清空"); renderAll(); switchView("stats");
       }
     };

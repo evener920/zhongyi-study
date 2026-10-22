@@ -81,6 +81,12 @@ button{font-family:inherit;cursor:pointer}
 }
 .checkin-btn:hover{filter:brightness(1.05)}
 .checkin-btn.done{background:#e6f6ea;color:var(--ok);box-shadow:none}
+.daily-tasks{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.dtask{display:flex;align-items:center;gap:10px;background:#fafbfe;border:1px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;font-size:15px;font-weight:600;transition:.12s;user-select:none}
+.dtask:hover{border-color:var(--brand)}
+.dtask.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.dtask input{width:18px;height:18px;accent-color:var(--ok);cursor:pointer;flex:0 0 auto}
+.dtask-summary{margin-top:12px;font-size:13px;color:var(--muted)}
 .rings{display:flex;gap:16px;justify-content:space-around;flex-wrap:wrap}
 .ring{text-align:center}
 .ring svg{transform:rotate(-90deg)}
