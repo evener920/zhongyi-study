@@ -17,6 +17,12 @@
   state.videos = state.videos || {};
   state.gallery = state.gallery || []; // 成语动画廊：用户自添加的成语卡
   state.settings = state.settings || { dailyGoal: 15 };
+  // 首次访问（本地尚未自定义过）：用预设的《成语动画廊》180 集填充动画廊
+  if(state.gallery.length===0 && !state._gallerySeeded){
+    state.gallery = (window.DEFAULT_GALLERY||[]).map((c,i)=>({ id:"def"+i, word:c.word, explanation:c.explanation||"", url:c.url }));
+    state._gallerySeeded = true;
+    save();
+  }
 
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 
@@ -660,7 +666,10 @@
   function videoEmbed(url){
     try{
       const bvm = url.match(/BV[0-9A-Za-z]+/);
-      if(bvm) return { type:"iframe", src:"https://player.bilibili.com/player.html?bvid="+bvm[0]+"&page=1&high_quality=1&autoplay=0" };
+      if(bvm){
+        const pg = (url.match(/[?&]page=(\d+)/)||[])[1] || "1"; // 支持分P视频（如成语动画廊 180 集）
+        return { type:"iframe", src:"https://player.bilibili.com/player.html?bvid="+bvm[0]+"&page="+pg+"&high_quality=1&autoplay=0" };
+      }
       const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
       if(yt) return { type:"iframe", src:"https://www.youtube.com/embed/"+yt[1] };
       return { type:"link", src:url };
@@ -927,6 +936,7 @@
         <h3>🎬 成语动画廊</h3>
         <p class="section-desc">把喜欢的成语动画收集成卡片，点「播放」单独看，互不打扰；也能自己添加成语卡。</p>
         <button class="btn btn-primary" id="g-add-toggle">➕ 添加成语卡</button>
+        <button class="btn btn-ghost" id="g-batch-toggle" style="margin-left:8px">📥 批量导入</button>
         <div class="gallery-add" id="g-add-form" hidden>
           <div class="ga-row"><label>成语</label><input id="g-word" placeholder="如：画蛇添足"></div>
           <div class="ga-row"><label>解释(选填)</label><input id="g-exp" placeholder="一句话解释"></div>
@@ -937,12 +947,39 @@
           </div>
           <div class="legend">B站 BV 链接会内嵌播放；抖音等不支持内嵌的会给出“打开”按钮。进度保存在本浏览器。</div>
         </div>
+        <div class="gallery-add" id="g-batch-form" hidden>
+          <p class="legend">每行一条：<b>成语 + 空格 + 视频链接</b>。例如：<br>画蛇添足 https://www.bilibili.com/video/BVxxxx<br>守株待兔 https://www.bilibili.com/video/BVyyyy<br>支持 B站 / 抖音 / YouTube；空行忽略，重复成语自动跳过。</p>
+          <textarea id="g-batch-text" rows="9" placeholder="画蛇添足 https://www.bilibili.com/video/BVxxxx&#10;守株待兔 https://www.bilibili.com/video/BVyyyy"></textarea>
+          <div class="ga-actions">
+            <button class="btn btn-primary" id="g-batch-save">导入全部</button>
+            <button class="btn btn-ghost" id="g-batch-cancel">取消</button>
+          </div>
+        </div>
       </div>
       <div class="grid gallery-grid">${cards.length ? cards.map(cardHtml).join("") : `<div class="empty">还没有卡片，点上方“添加成语卡”开始收集吧～</div>`}</div>`;
 
     const cnt = document.getElementById("cnt-gallery"); if(cnt) cnt.textContent = cards.length;
 
     v.querySelector("#g-add-toggle").onclick = ()=>{ const f=v.querySelector("#g-add-form"); f.hidden=!f.hidden; };
+    v.querySelector("#g-batch-toggle").onclick = ()=>{ const f=v.querySelector("#g-batch-form"); f.hidden=!f.hidden; };
+    v.querySelector("#g-batch-cancel").onclick = ()=>{ v.querySelector("#g-batch-form").hidden=true; };
+    v.querySelector("#g-batch-save").onclick = ()=>{
+      const text = v.querySelector("#g-batch-text").value || "";
+      const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      let added=0, skipped=0;
+      state.gallery = state.gallery||[];
+      const existing = new Set(state.gallery.map(c=>c.word));
+      lines.forEach(line=>{
+        const um = line.match(/(https?:\/\/[^\s]+)/);
+        if(!um){ skipped++; return; }
+        const url = um[0].replace(/[）)】\]]$/, "");
+        const word = line.slice(0, um.index).replace(/[\s|，,;；、。、]+$/g, "").trim();
+        if(!word || existing.has(word)){ skipped++; return; }
+        state.gallery.push({ id: Date.now()*1000 + added, word, explanation:"", url });
+        existing.add(word); added++;
+      });
+      save(); galleryOpen=null; toast(`批量导入 ${added} 张，跳过 ${skipped} 张 🎉`); renderGallery();
+    };
     v.querySelector("#g-cancel").onclick = ()=>{ v.querySelector("#g-add-form").hidden=true; };
     v.querySelector("#g-save").onclick = ()=>{
       const word=v.querySelector("#g-word").value.trim();
