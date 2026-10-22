@@ -101,10 +101,25 @@
   }
   function todayPlan(){
     const goal = state.settings.dailyGoal;
-    const isIdiom = k => k.indexOf("idiom")===0;   // 首页学习计划不含成语
-    const due = dueReviews().filter(k=> !isIdiom(k));
-    const pool = unlearned().filter(x=> x.key.indexOf("idiom")!==0);
-    const extra = pool.slice(0, Math.max(0, goal - due.length)).map(x=>x.key);
+    const cats = ["poems","words","idioms"];
+    // 1) 到期复习：已学且到了复习日（艾宾浩斯“下次复习日”<= 今天）且尚未掌握——覆盖全部三类资源
+    const due = dueReviews();
+    // 2) 新学：从未学过的，在诗词 / 单词 / 成语 三类之间均衡“循环”取，避免总是先学诗词
+    const un = unlearned();
+    const byCat = { poems:[], words:[], idioms:[] };
+    un.forEach(x=> byCat[catOfKey(x.key)].push(x.key));
+    const ptr = { poems:0, words:0, idioms:0 };
+    const extra = [];
+    const need = Math.max(0, goal - due.length);
+    let turn = 0;
+    while(extra.length < need){
+      const avail = cats.filter(c=> ptr[c] < byCat[c].length);
+      if(!avail.length) break;
+      // 在“仍有内容”的类别间轮询取一个：诗词→单词→成语→诗词… 实现均衡循环练习
+      const pick = avail[turn % avail.length];
+      extra.push(byCat[pick][ptr[pick]++]);
+      turn++;
+    }
     return { due, extra };
   }
 
@@ -154,14 +169,16 @@
       if(plan.due.length===0 && plan.extra.length===0)
         return `<div class="empty">🎉 今日计划已完成，或资料已全部学完！</div>`;
       const item = (key,kind)=>{
-        const cat=catOfKey(key); const arr=D[cat==="poems"?"poems":cat==="words"?"words":"idioms"];
+        const cat=catOfKey(key); const arr=D[cat];
         const it = arr.find(x=>x.key===key);
+        const it2 = state.items[key];
         let title, sub;
         if(cat==="poems"){ title=it.title; sub=(it.author||"")+(it.dynasty?" · "+it.dynasty:""); }
         else if(cat==="words"){ title=it.text+" "+it.phonetic; sub=it.cn+" · "+it.grade; }
-        else { title=it.word; sub=it.explanation.slice(0,28)+" · "+it.grade; }
+        else { title=it.word; sub=(it.explanation||"").slice(0,28)+" · "+it.grade; }
+        const label = kind==='due' ? ('第'+(it2?it2.stage+1:1)+'次复习') : '新学';
         return `<div class="plan-item">
-          <span class="badge ${kind==='due'?'do':'new'}">${kind==='due'?'待复习':'新学'}</span>
+          <span class="badge ${kind==='due'?'do':'new'}">${label}</span>
           <div class="pi-main"><div class="pi-t">${esc(title)}</div><div class="pi-s">${esc(sub)}</div></div>
           <button class="mini-btn" data-go="${key}">去学习</button>
         </div>`;
@@ -190,7 +207,7 @@
             </div>
           </div>
           <div class="panel">
-            <h3>🎯 今日学习计划 <span style="font-size:12px;color:var(--muted);font-weight:400">（每日目标 ${state.settings.dailyGoal} 条 · 不含成语）</span></h3>
+            <h3>🎯 今日学习计划 <span style="font-size:12px;color:var(--muted);font-weight:400">（艾宾浩斯记忆曲线 · 诗词 / 单词 / 成语 循环练习）</span></h3>
             ${planHtml()}
           </div>
         </div>
@@ -243,6 +260,7 @@
     const idx = list.findIndex(x=>x.key===key);
     if(idx>=0){ filters[cat].page = Math.floor(idx / PER_PAGE); paintGrid(cat); }
     openModal(cat, key);
+    testMode = true; refreshModal(); // 进入“主动回忆”练习：先自己想/背，再显示答案
   }
 
   /* ============ 模块（诗词/单词/成语） ============ */
