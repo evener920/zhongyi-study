@@ -693,6 +693,19 @@
     return (item.word||"")+" 成语故事 解释";
   }
 
+  // 抖音：解析出视频ID。www.douyin.com/video 禁止 iframe（X-Frame DENY），
+  // 但官方开放平台播放器 open.douyin.com/player/video 允许内嵌 —— 可直接在页面内观看，无需跳转。
+  function douyinVideoId(url){
+    if(!/douyin\.com/i.test(url)) return "";
+    let m = url.match(/douyin\.com\/(?:video|share\/video)\/(\d{6,})/);            // 完整视频页/分享页
+    if(m) return m[1];
+    m = url.match(/open\.douyin\.com\/player\/video\?[^#]*\bvid=(\d{6,})/);         // 已是开放平台播放器
+    if(m) return m[1];
+    m = url.match(/v\.douyin\.com\/([A-Za-z0-9_\-]{4,})/);                          // 短链：用预置映射（浏览器端无法跨域跟随跳转）
+    if(m && window.DOUYIN_SHORT && window.DOUYIN_SHORT[m[1]]) return window.DOUYIN_SHORT[m[1]];
+    return "";
+  }
+
   // 把任意视频链接转成可内嵌 / 需跳转 的形式（支持 B站 / YouTube / 抖音 等）
   function videoEmbed(url){
     try{
@@ -703,6 +716,8 @@
       }
       const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
       if(yt) return { type:"iframe", src:"https://www.youtube.com/embed/"+yt[1] };
+      const dyId = douyinVideoId(url);
+      if(dyId) return { type:"iframe", portrait:true, src:"https://open.douyin.com/player/video?vid="+dyId+"&autoplay=1" };
       return { type:"link", src:url };
     }catch(e){ return { type:"link", src:url }; }
   }
@@ -784,8 +799,8 @@
           <div class="sv-head"><span>${isUserVideo?'📺 我的视频':'📺 推荐视频'} ${emb.type==='iframe'?'（已内嵌播放）':'（点击打开）'}</span>
             ${isUserVideo?'<button class="mini-btn sv-del" id="m-vdel">删除</button>':''}</div>
           ${emb.type==='iframe'
-            ? `<div class="video-frame"><iframe src="${emb.src}" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
-            : `<a class="bili-btn" href="${esc(saved)}" target="_blank" rel="noopener">▶ 打开视频（抖音 / 其他平台）</a>`}
+            ? `<div class="video-frame${emb.portrait?' portrait':''}"><iframe src="${emb.src}" allow="encrypted-media; picture-in-picture; autoplay; fullscreen" allowfullscreen></iframe></div>`
+            : `<a class="bili-btn" href="${esc(saved)}" target="_blank" rel="noopener">▶ 打开视频（该链接暂无法内嵌）</a>`}
         </div>`;
     }
     const addForm = `<details class="add-video">
@@ -795,7 +810,7 @@
                  value="${saved?esc(saved):''}">
           <button class="mini-btn" id="m-vsave">保存</button>
         </div>
-        <div class="legend">保存后该条目优先播放你选的视频；抖音等不支持内嵌的会自动用「打开」按钮。进度已随账号本地保存。</div>
+        <div class="legend">抖音 / B站 / YouTube 会尽量直接在页面内播放；个别无法解析的链接才用「打开」按钮。进度已随账号本地保存。</div>
       </details>`;
     let video = `<div class="video-box">
         <h4>🎬 视频讲解（辅助学习）</h4>
