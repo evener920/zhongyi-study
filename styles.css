@@ -142,6 +142,7 @@ button{font-family:inherit;cursor:pointer}
 .add-video{margin:6px 0 10px;border:1px dashed var(--line);border-radius:12px;padding:10px 12px}
 .add-video summary{cursor:pointer;color:var(--brand);font-size:13px;font-weight:600;user-select:none}
 .add-video[open]{border-style:solid}
+.add-video textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.6}
 .av-row{display:flex;gap:8px;margin-top:10px}
 .av-row input{flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
 .av-row .mini-btn{white-space:nowrap}

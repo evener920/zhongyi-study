@@ -706,6 +706,26 @@
     return "";
   }
 
+  // 规范化视频链接：抖音一律转成完整视频页（www.douyin.com/video/{id}），
+  // 这样无论用户粘贴的是短链、分享页还是开放平台链接，都能稳定内嵌，不依赖短链映射表。
+  function normalizeVideoUrl(raw){
+    const url = (raw||"").trim();
+    if(!url) return "";
+    const dyId = douyinVideoId(url);
+    if(dyId) return "https://www.douyin.com/video/" + dyId;
+    return url;
+  }
+  // 按“名称/标题关键词”在 诗词 / 成语 中查找条目（exact 优先，再模糊，最后“分享文案里包含标题”兜底）；单词不绑视频，故跳过。
+  function matchItemByName(kw){
+    kw = (kw||"").trim();
+    if(!kw) return null;
+    const cats=["poems","idioms"];
+    for(const cat of cats){ const it=D[cat].find(x=> x.title===kw || x.text===kw || x.word===kw); if(it) return {cat,key:it.key}; }
+    for(const cat of cats){ const it=D[cat].find(x=> ((x.title||x.text||x.word)||"").indexOf(kw)>=0); if(it) return {cat,key:it.key}; }
+    if(kw.length>=2){ for(const cat of cats){ const it=D[cat].find(x=>{ const t=(x.title||x.text||x.word)||""; return t.length>=2 && kw.indexOf(t)>=0; }); if(it) return {cat,key:it.key}; } }
+    return null;
+  }
+
   // 把任意视频链接转成可内嵌 / 需跳转 的形式（支持 B站 / YouTube / 抖音 等）
   function videoEmbed(url){
     try{
@@ -812,10 +832,18 @@
         </div>
         <div class="legend">抖音 / B站 / YouTube 会尽量直接在页面内播放；个别无法解析的链接才用「打开」按钮。进度已随账号本地保存。</div>
       </details>`;
+    const batchImport = `<details class="add-video">
+        <summary>📥 批量导入视频链接（每行：名称 链接）</summary>
+        <textarea id="m-vbatch" class="batch-area" rows="6" placeholder="每行一条，名称和链接用空格分开，例如：&#10;清明 https://v.douyin.com/xxxx/&#10;春晓 https://v.douyin.com/yyyy/"></textarea>
+        <div class="av-row"><button class="mini-btn" id="m-vbatch-save">批量导入</button></div>
+        <div class="legend">系统按“名称”自动匹配 诗词 / 成语 并绑定视频；抖音/B站/YouTube 均会尽量内嵌播放。支持一次粘贴多行，不会截断。</div>
+        <div id="m-vbatch-result" class="legend" style="color:var(--ok)"></div>
+      </details>`;
     let video = `<div class="video-box">
         <h4>🎬 视频讲解（辅助学习）</h4>
         ${savedHtml}
         ${addForm}
+        ${batchImport}
         <a class="bili-btn" href="${bili}" target="_blank" rel="noopener">🔍 在 B 站搜索讲解（国内推荐 · 内容更适龄）</a>
         <details class="yt-details">
           <summary>▸ 看 YouTube？（需代理 · 建议家长陪同）</summary>
@@ -858,6 +886,25 @@
     const sa=document.getElementById("m-showans"); if(sa) sa.onclick=()=>{ testMode=false; const ov=document.getElementById("m-overlay"); if(ov) ov.hidden=true; };
     const vs=document.getElementById("m-vsave"); if(vs) vs.onclick=()=>{ const inp=document.getElementById("m-vurl"); saveVideo(key, inp?inp.value:""); };
     const vd=document.getElementById("m-vdel"); if(vd) vd.onclick=()=>delVideo(key);
+    const vbs=document.getElementById("m-vbatch-save");
+    if(vbs) vbs.onclick = ()=>{
+      const ta=document.getElementById("m-vbatch");
+      const lines=(ta?ta.value:"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      let ok=0, miss=0; const misses=[];
+      lines.forEach(line=>{
+        const um=line.match(/(https?:\/\/\S+)/);
+        if(!um){ miss++; misses.push(line); return; }
+        const url=normalizeVideoUrl(um[1]);
+        const kw=line.replace(um[1],"").replace(/[#＃].*$/,"").trim();
+        const m=matchItemByName(kw);
+        if(m){ state.videos[m.key]=url; ok++; } else { miss++; misses.push(kw||line); }
+      });
+      save();
+      toast(ok? `成功导入 ${ok} 个视频 📺` : "未找到可匹配的内容，请检查名称");
+      refreshModal();
+      const res=document.getElementById("m-vbatch-result");
+      if(res) res.innerHTML = `已匹配并绑定 <b>${ok}</b> 条` + (miss? `；未匹配 ${miss} 条：${esc(misses.slice(0,6).join("、"))}${miss>6?"…":""}` : "");
+    };
     document.getElementById("modal-body").querySelectorAll("[data-nav]").forEach(b=> b.onclick=()=> openModal(cat, b.dataset.nav));
   }
 
