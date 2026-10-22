@@ -1,0 +1,7 @@
+# keep only deployable static files; ignore everything else
+*
+!index.html
+!styles.css
+!app.js
+!data.js
+!.gitignore

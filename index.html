@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>中毅学习打卡 · 诗词 / 单词 / 成语</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📚</span>
+      <div>
+        <div class="brand-name">中毅学习打卡</div>
+        <div class="brand-sub">诗词 · 单词 · 成语 科学进阶</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-view="home">打卡首页</button>
+      <button class="nav-btn" data-view="poems">诗词 <i id="cnt-poems"></i></button>
+      <button class="nav-btn" data-view="words">单词 <i id="cnt-words"></i></button>
+      <button class="nav-btn" data-view="idioms">成语 <i id="cnt-idioms"></i></button>
+      <button class="nav-btn" data-view="stats">统计</button>
+    </nav>
+    <div class="today" id="today-label"></div>
+  </header>
+
+  <main>
+    <!-- 首页 -->
+    <section id="view-home" class="view"></section>
+    <!-- 诗词 -->
+    <section id="view-poems" class="view" hidden></section>
+    <!-- 单词 -->
+    <section id="view-words" class="view" hidden></section>
+    <!-- 成语 -->
+    <section id="view-idioms" class="view" hidden></section>
+    <!-- 统计 -->
+    <section id="view-stats" class="view" hidden></section>
+  </main>
+
+  <!-- 详情弹窗 -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-mask" data-close></div>
+    <div class="modal-card">
+      <button class="modal-close" data-close>×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 提示条 -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
