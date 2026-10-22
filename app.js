@@ -285,7 +285,20 @@
     const slice = list.slice(f.page*PER_PAGE, (f.page+1)*PER_PAGE);
     const grid = document.getElementById(cat+"-grid");
     grid.innerHTML = slice.map(item=> cardHtml(cat, item)).join("");
-    grid.querySelectorAll("[data-key]").forEach(c=> c.onclick = ()=> openModal(cat, c.dataset.key));
+    grid.querySelectorAll("[data-key]").forEach(c=>{
+      c.addEventListener('click', e=>{
+        if(e.target.closest('.flash-btn')) return;   // 会与不会按钮单独处理
+        openModal(cat, c.dataset.key);                // 点词条放大看详情
+      });
+      c.querySelectorAll('.flash-btn').forEach(b=>{
+        b.addEventListener('click', e=>{
+          e.stopPropagation();
+          const key=c.dataset.key;
+          if(b.dataset.act==='know'){ learnItem(key); paintGrid(cat); toast('👍 记牢了'); }
+          else { openModal(cat, key); toast('再看看～'); }
+        });
+      });
+    });
     document.getElementById(cat+"-count").textContent = "共 "+list.length+" 条";
     document.getElementById(cat+"-pinfo").textContent = (f.page+1)+" / "+pages;
     document.getElementById(cat+"-prev").disabled = f.page===0;
@@ -297,18 +310,23 @@
     const badge = st==="new" ? `<span class="badge new">未学</span>`
                : st==="mastered" ? `<span class="badge done">已掌握</span>`
                : `<span class="badge do">复习中</span>`;
-    let title, sub, tags="";
     if(cat==="poems"){
-      title = item.title; sub = (item.author||"")+(item.dynasty?" · "+item.dynasty:"");
-      tags = (item.tags||[]).slice(0,3).map(t=>`<span class="c-tag">${esc(t)}</span>`).join("");
-    } else if(cat==="words"){
-      title = item.text; sub = (item.phonetic?item.phonetic+" · ":"")+item.cn;
-    } else {
-      title = item.word; sub = item.grade + " · " + item.explanation.slice(0,30);
+      const title = item.title, sub = (item.author||"")+(item.dynasty?" · "+item.dynasty:"");
+      const tags = (item.tags||[]).slice(0,3).map(t=>`<span class="c-tag">${esc(t)}</span>`).join("");
+      return `<div class="card" data-key="${item.key}">${badge}
+        <div class="c-title">${esc(title)}</div>
+        <div class="c-sub">${esc(sub)}</div>${tags}</div>`;
     }
-    return `<div class="card" data-key="${item.key}">${badge}
-      <div class="c-title">${esc(title)}</div>
-      <div class="c-sub">${esc(sub)}</div>${tags}</div>`;
+    // 单词 / 成语：闪卡——正面只显示词条 + 会与不会
+    const term = cat==="words" ? item.text : item.word;
+    return `<div class="card flash" data-key="${item.key}">
+      ${badge}
+      <div class="flash-term">${esc(term)}</div>
+      <div class="flash-actions">
+        <button class="flash-btn know" data-act="know">会 ✔</button>
+        <button class="flash-btn dont" data-act="dont">不会 ✕</button>
+      </div>
+    </div>`;
   }
 
   /* ============ 详情弹窗 + 视频 ============ */
