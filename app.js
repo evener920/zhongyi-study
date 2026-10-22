@@ -14,6 +14,7 @@
   let state = loadState();
   state.checkins = state.checkins || {};
   state.items = state.items || {};
+  state.videos = state.videos || {};
   state.settings = state.settings || { dailyGoal: 15 };
 
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -141,6 +142,7 @@
     const overall = cs.reduce((a,b)=>a+b.learned,0) / cs.reduce((a,b)=>a+b.total,0);
     const s = streak();
     const td = totalDays();
+    const learnedCount = cs.reduce((a,b)=>a+b.learned,0);
     const plan = todayPlan();
 
     const planHtml = function(){
@@ -172,9 +174,10 @@
               ${state.checkins[t]?"✅ 今日已打卡":"点击打卡 · 今日 "+t}
             </button>
             <div class="stat-row" style="margin-top:16px">
-              <div class="stat"><div class="v" style="color:var(--brand)">${s}</div><div class="k">连续打卡(天)</div></div>
-              <div class="stat"><div class="v">${td}</div><div class="k">累计打卡(天)</div></div>
+              <div class="stat"><div class="v" style="color:var(--brand)">🔥 ${s}</div><div class="k">连续打卡(天)</div></div>
+              <div class="stat"><div class="v">⭐ ${learnedCount}</div><div class="k">已点亮星星</div></div>
               <div class="stat"><div class="v" style="color:var(--ok)">${Math.round(overall*100)}%</div><div class="k">总完成度</div></div>
+              <div class="stat"><div class="v">${td}</div><div class="k">累计打卡(天)</div></div>
             </div>
           </div>
           <div class="panel">
@@ -317,8 +320,29 @@
     return (item.word||"")+" 成语故事 解释";
   }
 
+  // 把任意视频链接转成可内嵌 / 需跳转 的形式（支持 B站 / YouTube / 抖音 等）
+  function videoEmbed(url){
+    try{
+      const bvm = url.match(/BV[0-9A-Za-z]+/);
+      if(bvm) return { type:"iframe", src:"https://player.bilibili.com/player.html?bvid="+bvm[0]+"&page=1&high_quality=1&autoplay=0" };
+      const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+      if(yt) return { type:"iframe", src:"https://www.youtube.com/embed/"+yt[1] };
+      return { type:"link", src:url };
+    }catch(e){ return { type:"link", src:url }; }
+  }
+
+  function saveVideo(key, url){
+    url = (url||"").trim();
+    if(!url){ toast("请先粘贴视频链接"); return; }
+    state.videos[key] = url; save(); toast("已保存你的视频链接 ⭐");
+    refreshModal();
+  }
+  function delVideo(key){
+    delete state.videos[key]; save(); toast("已删除自定义视频"); refreshModal();
+  }
+
   function openModal(cat, key){
-    modalCat=cat; modalKey=key;
+    modalCat=cat; modalKey=key; testMode=false;
     document.getElementById("modal").hidden=false;
     document.body.style.overflow="hidden";
     refreshModal();
@@ -328,6 +352,21 @@
     document.body.style.overflow="";
     modalCat=null; modalKey=null;
   }
+  let testMode=false;
+  function speak(text, lang){
+    try{
+      if(!('speechSynthesis' in window)){ toast('当前浏览器不支持朗读'); return; }
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang=lang; u.rate=0.9; u.pitch=1;
+      window.speechSynthesis.speak(u);
+    }catch(e){ toast('朗读不可用'); }
+  }
+  function speakFor(cat,item){
+    if(cat==='words') speak(item.text,'en-US');
+    else if(cat==='poems') speak(item.content,'zh-CN');
+    else speak(item.word+'。'+item.explanation,'zh-CN');
+  }
   function refreshModal(){
     if(!modalKey) return;
     const cat=modalCat, key=modalKey;
@@ -335,34 +374,64 @@
     const st=statusOf(key);
     const it=state.items[key];
 
-    let bodyHtml="", actions="";
-    if(cat==="poems"){
-      bodyHtml = `<div class="m-title">${esc(item.title)}</div>
-        <div class="m-meta">${esc(item.author||"")}${item.dynasty?" · "+esc(item.dynasty):""}${item.form?" · "+esc(item.form):""}</div>
-        <div class="m-content">${esc(item.content)}</div>
-        <div class="m-tags">${(item.tags||[]).map(t=>`<span class="c-tag">${esc(t)}</span>`).join("")}</div>`;
-    } else if(cat==="words"){
-      bodyHtml = `<div class="m-title">${esc(item.text)}</div>
-        <div class="m-meta">${esc(item.grade)} · ${esc(item.unit)}</div>
-        <div class="m-content">${esc(item.phonetic||"")}\n\n${esc(item.cn)}</div>`;
-    } else {
-      bodyHtml = `<div class="m-title">${esc(item.word)}</div>
-        <div class="m-meta">${esc(item.grade)}</div>
-        <div class="m-content">${esc(item.explanation)}</div>`;
-    }
+    const metaMap = cat==='poems'
+      ? `${esc(item.author||"")}${item.dynasty?" · "+esc(item.dynasty):""}${item.form?" · "+esc(item.form):""}`
+      : cat==='words' ? `${esc(item.grade)} · ${esc(item.unit)}` : `${esc(item.grade)}`;
+    const header = `<div class="m-title">${esc(item.title||item.text||item.word)}</div>
+        <div class="m-meta">${metaMap}</div>`;
 
-    // 视频区
+    let contentText="", tags="";
+    if(cat==="poems"){ contentText=item.content; tags=`<div class="m-tags">${(item.tags||[]).map(t=>`<span class="c-tag">${esc(t)}</span>`).join("")}</div>`; }
+    else if(cat==="words"){ contentText=(item.phonetic||"")+"\n\n"+item.cn; }
+    else { contentText=item.explanation; }
+
+    // 主动回忆：盖住答案，先自己想，再显示
+    const contentWrap = `<div class="m-content-wrap">
+        <div class="m-content">${esc(contentText)}</div>
+        <div class="test-overlay" id="m-overlay" ${testMode?'':'hidden'}>
+          <div class="ot">先自己想一想 / 背一背 👀</div>
+          <button class="btn btn-primary" id="m-showans">显示答案</button>
+        </div>
+      </div>${tags}`;
+
+    // 视频区：优先用你保存的链接（支持 B站/YouTube 内嵌，抖音等跳转），并保留 B站搜索 / YouTube 选项
     const q = videoQuery(cat, item);
     const yt = "https://www.youtube.com/embed?listType=search&list="+encodeURIComponent(q);
     const bili = "https://search.bilibili.com/all?keyword="+encodeURIComponent(q);
+    const saved = state.videos[key];
+    let savedHtml = "";
+    if(saved){
+      const emb = videoEmbed(saved);
+      savedHtml = `<div class="saved-video">
+          <div class="sv-head"><span>📺 我的视频 ${emb.type==='iframe'?'（已内嵌播放）':'（点击打开）'}</span>
+            <button class="mini-btn sv-del" id="m-vdel">删除</button></div>
+          ${emb.type==='iframe'
+            ? `<div class="video-frame"><iframe src="${emb.src}" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
+            : `<a class="bili-btn" href="${esc(saved)}" target="_blank" rel="noopener">▶ 打开视频（抖音 / 其他平台）</a>`}
+        </div>`;
+    }
+    const addForm = `<details class="add-video">
+        <summary>➕ 添加视频链接（抖音 / B站 / YouTube 等）</summary>
+        <div class="av-row">
+          <input id="m-vurl" type="url" placeholder="粘贴视频链接，如 https://v.douyin.com/... 或 B站/YouTube"
+                 value="${saved?esc(saved):''}">
+          <button class="mini-btn" id="m-vsave">保存</button>
+        </div>
+        <div class="legend">保存后该条目优先播放你选的视频；抖音等不支持内嵌的会自动用「打开」按钮。进度已随账号本地保存。</div>
+      </details>`;
     const video = `<div class="video-box">
         <h4>🎬 视频讲解（辅助学习）</h4>
-        <div class="video-frame"><iframe src="${yt}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
-        <a class="bili-btn" href="${bili}" target="_blank" rel="noopener">▶ 在 B 站搜索更多讲解（国内推荐）</a>
-        <div class="legend">YouTube 嵌入全球可用（国内可能需代理）；B 站按钮保证国内可看。</div>
+        ${savedHtml}
+        ${addForm}
+        <a class="bili-btn" href="${bili}" target="_blank" rel="noopener">🔍 在 B 站搜索讲解（国内推荐 · 内容更适龄）</a>
+        <details class="yt-details">
+          <summary>▸ 看 YouTube？（需代理 · 建议家长陪同）</summary>
+          <div class="video-frame"><iframe src="${yt}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+          <div class="legend">YouTube 为关键词搜索结果，内容未经筛选，儿童请在家长陪同下观看。</div>
+        </details>
       </div>`;
 
-    // 操作按钮
+    let actions="";
     if(st==="new"){
       actions = `<button class="btn btn-primary" id="m-learn">✓ 我学会了（打卡）</button>`;
     } else if(st==="review"){
@@ -373,8 +442,9 @@
       actions = `<span class="badge done" style="position:static">🌟 已掌握</span>
         <button class="btn btn-ghost" id="m-reset">重新学习</button>`;
     }
+    const speakBtn = `<button class="btn btn-ghost" id="m-speak">🔊 朗读</button>`;
+    const testBtn = `<button class="btn btn-ghost" id="m-test">🎯 自测模式</button>`;
 
-    // 上一条/下一条
     const list=currentList[cat]; const idx=list.findIndex(x=>x.key===key);
     const prev = idx>0 ? list[idx-1] : null;
     const next = idx>=0 && idx<list.length-1 ? list[idx+1] : null;
@@ -384,11 +454,16 @@
         <button class="btn btn-ghost" ${next?'data-nav="'+next.key+'"':'disabled'}>下一条 →</button>
       </div>`;
 
-    document.getElementById("modal-body").innerHTML = bodyHtml + video + `<div class="m-actions">${actions}</div>` + nav;
+    document.getElementById("modal-body").innerHTML = header + contentWrap + video + `<div class="m-actions">${actions}${speakBtn}${testBtn}</div>` + nav;
 
     const l=document.getElementById("m-learn"); if(l) l.onclick=()=>learnItem(key);
     const r=document.getElementById("m-review"); if(r) r.onclick=()=>reviewItem(key);
     const rs=document.getElementById("m-reset"); if(rs) rs.onclick=()=>resetItem(key);
+    const sp=document.getElementById("m-speak"); if(sp) sp.onclick=()=>speakFor(cat,item);
+    const tb=document.getElementById("m-test"); if(tb) tb.onclick=()=>{ const ov=document.getElementById("m-overlay"); if(ov) ov.hidden=false; };
+    const sa=document.getElementById("m-showans"); if(sa) sa.onclick=()=>{ testMode=false; const ov=document.getElementById("m-overlay"); if(ov) ov.hidden=true; };
+    const vs=document.getElementById("m-vsave"); if(vs) vs.onclick=()=>{ const inp=document.getElementById("m-vurl"); saveVideo(key, inp?inp.value:""); };
+    const vd=document.getElementById("m-vdel"); if(vd) vd.onclick=()=>delVideo(key);
     document.getElementById("modal-body").querySelectorAll("[data-nav]").forEach(b=> b.onclick=()=> openModal(cat, b.dataset.nav));
   }
 
