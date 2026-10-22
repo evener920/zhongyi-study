@@ -157,3 +157,83 @@ button{font-family:inherit;cursor:pointer}
 .section-desc{color:var(--muted);font-size:13px;margin:0 0 18px}
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1f2733;color:#fff;padding:12px 20px;border-radius:12px;z-index:99;box-shadow:var(--shadow);font-size:14px}
 .empty{text-align:center;color:var(--muted);padding:40px}
+
+/* ============ 单词游戏 ============ */
+#words-game{position:relative;min-height:220px}
+.subnav{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 18px}
+.subnav-btn{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;transition:.15s}
+.subnav-btn:hover{border-color:var(--word);color:var(--word)}
+.subnav-btn.active{background:var(--word);border-color:var(--word);color:#fff}
+.game-head{background:linear-gradient(135deg,#eafaf4,#d6f3e8);border:1px solid #bfe9d6;border-radius:14px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:#1f5b48}
+.game-head b{color:#14714f}
+.game-foot{display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+/* 🎉 撒花 */
+.balloon{position:absolute;top:46%;font-size:34px;pointer-events:none;z-index:30;animation:balloon 1.6s ease-out forwards}
+@keyframes balloon{0%{transform:translateY(0) scale(.4);opacity:0}18%{opacity:1}100%{transform:translateY(-180px) scale(1.25);opacity:0}}
+/* 🎴 翻翻卡 */
+.flip-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}
+.flip-card{perspective:900px;display:flex;flex-direction:column;gap:8px}
+.flip-inner{position:relative;width:100%;height:128px;transition:transform .55s;transform-style:preserve-3d;cursor:pointer}
+.flip-card.flipped .flip-inner{transform:rotateY(180deg)}
+.flip-front,.flip-back{position:absolute;inset:0;backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;padding:10px;text-align:center}
+.flip-front{background:linear-gradient(135deg,var(--word),#5fd0b0);color:#fff;box-shadow:var(--shadow)}
+.flip-back{background:#fff;border:1px solid var(--line);transform:rotateY(180deg)}
+.flip-card.done .flip-front{box-shadow:0 0 0 4px var(--ok) inset}
+.flip-card.not .flip-front{box-shadow:0 0 0 4px var(--warn) inset}
+.fc-word{font-size:24px;font-weight:800;word-break:break-word}
+.fc-hint{font-size:12px;opacity:.85;margin-top:6px}
+.fc-phon{font-size:15px;color:var(--muted);margin-bottom:6px}
+.fc-cn{font-size:18px;font-weight:700}
+.flip-foot{display:flex;gap:6px;justify-content:center}
+.flip-foot .mini-btn{flex:1;padding:7px 0;font-size:13px}
+.mini-btn.ok{background:var(--ok-soft);color:var(--ok);border-color:var(--ok)}
+.mini-btn.no{background:#fff2e0;color:#c87a16;border-color:#e0a92b}
+/* 🧩 配对 */
+.match-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.match-card{height:84px;border-radius:14px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;cursor:pointer;font-weight:700;font-size:15px;transition:.15s;user-select:none}
+.match-card:hover{border-color:var(--word)}
+.match-card.open{background:linear-gradient(135deg,#eefaf5,#d6f3e8);border-color:var(--word)}
+.match-card.matched{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);cursor:default}
+.match-card .mc-text{display:none}
+.match-card.open .mc-text,.match-card.matched .mc-text{display:block}
+.match-card:not(.open):not(.matched)::after{content:"❓";font-size:30px}
+/* 🎯 闯关 / ✍️ 拼写 */
+.quiz-word{font-size:30px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.quiz-opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.quiz-opt{border:1px solid var(--line);background:#fff;border-radius:14px;padding:16px;font-size:16px;font-weight:600;transition:.12s}
+.quiz-opt:hover{border-color:var(--word);background:#f3fbf8}
+.quiz-opt.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.quiz-opt.wrong{background:#ffe9e6;border-color:#d8483b;color:#d8483b}
+.quiz-result{font-size:22px;text-align:center;padding:24px;background:#f3fbf8;border-radius:14px}
+.quiz-result b{color:var(--word);font-size:30px}
+.spell-cn{font-size:26px;font-weight:800;margin-bottom:6px}
+.spell-phon{color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.spell-input{border:2px solid var(--line);border-radius:14px;padding:14px;font-size:20px;width:100%;max-width:360px;outline:none}
+.spell-input:focus{border-color:var(--word)}
+/* 🪣 分拣台 / 🗂️ 归类 通用“豆子” */
+.bean{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;cursor:grab;text-align:center;box-shadow:var(--shadow)}
+.bean:active{cursor:grabbing}
+.bean-word{font-size:18px;font-weight:800;word-break:break-word}
+.bean-cn{font-size:12px;color:var(--muted);margin:2px 0 6px}
+.bean-acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.bean-acts .mini-btn{padding:4px 8px;font-size:12px}
+.bean-chip{display:inline-block;background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok);border-radius:10px;padding:4px 10px;margin:4px;font-size:13px;font-weight:700}
+.bean.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+/* 分拣台布局 */
+.sort-board{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px}
+@media(max-width:760px){.sort-board{grid-template-columns:1fr}}
+.sort-col{background:#fafbfe;border:1px solid var(--line);border-radius:14px;padding:12px}
+.sort-col h4{margin:0 0 10px;font-size:14px}
+.sort-col.know{background:#f1faf3;border-color:#bfe9d6}
+.sort-col.dont{background:#fff7ef;border-color:#f0d9b8}
+.bean-pile{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;min-height:80px}
+.bean-zone{min-height:120px;border-radius:10px;display:flex;flex-wrap:wrap;align-content:flex-start}
+.bean-zone.over{outline:3px dashed var(--word);outline-offset:-4px;background:#eafaf4}
+/* 归类罐子 */
+.classify-pool{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;min-height:60px}
+.classify-jars{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.jar{background:#fafbfe;border:1px solid var(--line);border-radius:14px;padding:12px;min-height:120px}
+.jar h4{margin:0 0 8px;font-size:14px;text-align:center;color:var(--word)}
+.jar.over{outline:3px dashed var(--word);outline-offset:-4px;background:#eafaf4}
+.jar-body{display:flex;flex-wrap:wrap}

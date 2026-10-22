@@ -217,6 +217,7 @@
 
   function openPlanItem(key){
     const cat = catOfKey(key);
+    if(cat === "words") wordsMode = "cards"; // 从首页“去学习”进入时，先回到卡片墙视图
     switchView(cat);
     const list = currentList[cat];
     const idx = list.findIndex(x=>x.key===key);
@@ -245,6 +246,17 @@
     return arr;
   }
 
+  let wordsMode = "cards"; // 单词模块当前玩法：卡片墙 / 翻翻卡 / 配对 / 闯关 / 拼写 / 分拣台 / 归类
+  const WORDS_MODES = [
+    {k:"cards",label:"📇 卡片墙"},
+    {k:"flip",label:"🎴 翻翻卡"},
+    {k:"match",label:"🧩 配对"},
+    {k:"quiz",label:"🎯 闯关"},
+    {k:"spell",label:"✍️ 拼写"},
+    {k:"sort",label:"🪣 分拣台"},
+    {k:"classify",label:"🗂️ 归类"}
+  ];
+
   function renderModule(cat){
     const v = document.getElementById("view-"+cat);
     const opts = filterOptions(cat);
@@ -261,6 +273,21 @@
         <span class="spacer"></span>
         <span id="${cat}-count" style="color:var(--muted);font-size:13px"></span>
       </div>`;
+
+    // 单词模块：在筛选工具栏下方加一排“玩法”子导航，玩法更像一个好玩的游戏
+    if(cat === "words"){
+      const subnav = `<div class="subnav">${WORDS_MODES.map(m=>`<button class="subnav-btn ${m.k===wordsMode?'active':''}" data-mode="${m.k}">${m.label}</button>`).join("")}</div>`;
+      v.innerHTML = toolbar + subnav + `<div id="words-game"></div>`;
+      v.querySelector("#words-q").oninput = e=>{ f.q=e.target.value; f.page=0; rerenderWords(); };
+      opts.forEach(o=>{ v.querySelector("#words-sel-"+o.k).onchange = e=>{ f.f1key=o.k; f.f1=e.target.value; f.page=0; rerenderWords(); }; });
+      v.querySelectorAll(".subnav-btn").forEach(b=> b.onclick = ()=>{
+        wordsMode=b.dataset.mode;
+        v.querySelectorAll(".subnav-btn").forEach(x=> x.classList.toggle("active", x.dataset.mode===wordsMode));
+        rerenderWords();
+      });
+      rerenderWords();
+      return;
+    }
 
     v.innerHTML = toolbar + `<div class="grid" id="${cat}-grid"></div>
       <div class="pager"><button id="${cat}-prev">上一页</button><span class="pginfo" id="${cat}-pinfo"></span><button id="${cat}-next">下一页</button></div>`;
@@ -284,6 +311,7 @@
     f.page = Math.min(f.page, pages-1);
     const slice = list.slice(f.page*PER_PAGE, (f.page+1)*PER_PAGE);
     const grid = document.getElementById(cat+"-grid");
+    if(!grid) return; // 单词模块可能正处于某个玩法视图，不存在卡片网格
     grid.innerHTML = slice.map(item=> cardHtml(cat, item)).join("");
     grid.querySelectorAll("[data-key]").forEach(c=>{
       c.addEventListener('click', e=>{
@@ -327,6 +355,295 @@
         <button class="flash-btn dont" data-act="dont">不会 ✕</button>
       </div>
     </div>`;
+  }
+
+  /* ============ 单词游戏（像“豆子的归类游戏”一样好玩） ============ */
+  // 单词模块当前筛选下的候选池（尊重年级/单元筛选与搜索）
+  function wordsFiltered(){
+    const f = filters.words;
+    let arr = D.words.slice();
+    if(f.f1key && f.f1) arr = arr.filter(x=> x[f.f1key] === f.f1);
+    if(f.q){ const q=f.q.toLowerCase(); arr = arr.filter(x=> JSON.stringify(x).toLowerCase().indexOf(q) >= 0); }
+    return arr;
+  }
+  // 从候选池随机抽取 n 个，打乱顺序
+  function sampleWords(n){
+    const pool = wordsFiltered();
+    if(pool.length === 0) return [];
+    const shuffled = pool.slice().sort(()=> Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(n, shuffled.length));
+  }
+  function rerenderWords(){ renderWordsMode(wordsMode); }
+  function renderWordsMode(mode){
+    const c = document.getElementById("words-game");
+    if(!c) return;
+    if(mode==="cards")   return renderWordsCards(c);
+    if(mode==="flip")    return renderFlip(c);
+    if(mode==="match")   return renderMatch(c);
+    if(mode==="quiz")    return renderQuiz(c);
+    if(mode==="spell")   return renderSpell(c);
+    if(mode==="sort")    return renderSort(c);
+    if(mode==="classify")return renderClassify(c);
+  }
+  // 卡片墙（复用既有会/不会闪卡，作为单词默认视图）
+  function renderWordsCards(c){
+    c.innerHTML = `<div class="grid" id="words-grid"></div>
+      <div class="pager"><button id="words-prev">上一页</button><span class="pginfo" id="words-pinfo"></span><button id="words-next">下一页</button></div>`;
+    document.getElementById("words-prev").onclick = ()=>{ filters.words.page=Math.max(0,filters.words.page-1); paintGrid("words"); };
+    document.getElementById("words-next").onclick = ()=>{ filters.words.page++; paintGrid("words"); };
+    paintGrid("words");
+  }
+
+  // 撒花庆祝动画
+  function balloons(n, host){
+    host = host || document.getElementById("words-game") || document.body;
+    for(let i=0;i<(n||8);i++){
+      const b = document.createElement("div");
+      b.className = "balloon";
+      b.textContent = ["🎈","🎉","⭐","✨","💛","🌟"][i%6];
+      b.style.left = (8 + Math.random()*84) + "%";
+      b.style.animationDelay = (Math.random()*0.25) + "s";
+      host.appendChild(b);
+      setTimeout(()=> b.remove(), 1700);
+    }
+  }
+
+  // 🎴 翻翻卡：点卡片翻面看释义，会了点「会」
+  function renderFlip(c){
+    const set = sampleWords(12);
+    if(set.length===0){ c.innerHTML = `<div class="empty">当前筛选下没有单词，换个年级/单元试试～</div>`; return; }
+    c.innerHTML = `<div class="game-head">🎴 <b>翻翻卡</b>：点卡片翻面看释义，记住了就点「会」，记不住点「不会」</div>
+      <div class="flip-wall">${set.map(w=>`
+        <div class="flip-card" data-key="${w.key}">
+          <div class="flip-inner">
+            <div class="flip-front"><div class="fc-word">${esc(w.text)}</div><div class="fc-hint">点击翻面</div></div>
+            <div class="flip-back"><div class="fc-phon">${esc(w.phonetic)}</div><div class="fc-cn">${esc(w.cn)}</div></div>
+          </div>
+          <div class="flip-foot">
+            <button class="mini-btn" data-act="speak">🔊 听</button>
+            <button class="mini-btn ok" data-act="know">会 ✔</button>
+            <button class="mini-btn no" data-act="dont">不会 ✕</button>
+          </div>
+        </div>`).join("")}</div>
+      <div class="game-foot"><button class="btn btn-ghost" id="flip-more">🔄 换一批</button></div>`;
+    c.querySelectorAll(".flip-card").forEach(card=>{
+      const inner = card.querySelector(".flip-inner");
+      inner.addEventListener("click", ()=> card.classList.toggle("flipped"));
+      card.querySelectorAll(".flip-foot button").forEach(b=> b.addEventListener("click", e=>{
+        e.stopPropagation();
+        const key = card.dataset.key;
+        if(b.dataset.act==="speak"){ const w=D.words.find(x=>x.key===key); speak(w.text,"en-US"); }
+        else if(b.dataset.act==="know"){ learnItem(key); card.classList.add("done"); card.classList.remove("not"); toast("👍 记牢啦"); }
+        else { card.classList.add("not"); toast("再看看～"); }
+      }));
+    });
+    document.getElementById("flip-more").onclick = ()=> renderFlip(c);
+  }
+
+  // 🧩 配对：记忆翻牌，把单词和释义配成一对
+  function renderMatch(c){
+    const set = sampleWords(6);
+    if(set.length<2){ c.innerHTML = `<div class="empty">单词太少，无法配对，换个筛选试试～</div>`; return; }
+    const cards = [];
+    set.forEach((w,i)=>{ cards.push({pair:i,side:"w",text:w.text,key:w.key}); cards.push({pair:i,side:"m",text:w.cn,key:w.key}); });
+    cards.sort(()=> Math.random() - 0.5);
+    c.innerHTML = `<div class="game-head">🧩 <b>配对</b>：翻开两张卡，把单词和中文意思配成一对</div>
+      <div class="match-grid">${cards.map((cd,i)=>`<div class="match-card" data-i="${i}"><span class="mc-text">${esc(cd.text)}</span></div>`).join("")}</div>
+      <div class="game-foot"><span id="match-info"></span><button class="btn btn-ghost" id="match-restart">🔄 重玩</button></div>`;
+    const grid = c.querySelector(".match-grid");
+    const info = c.querySelector("#match-info");
+    let flipped=[], matched=new Set(), moves=0, locked=false;
+    function update(){ info.textContent = `已配对 ${matched.size}/${set.length} · 步数 ${moves}`; }
+    grid.querySelectorAll(".match-card").forEach(el=>{
+      el.addEventListener("click", ()=>{
+        if(locked) return;
+        const i = +el.dataset.i;
+        if(el.classList.contains("open") || el.classList.contains("matched") || flipped.includes(i)) return;
+        el.classList.add("open"); flipped.push(i);
+        if(flipped.length===2){
+          moves++;
+          const a = cards[flipped[0]], b = cards[flipped[1]];
+          if(a.pair===b.pair && a.side!==b.side){
+            matched.add(a.pair);
+            flipped.forEach(k=> grid.querySelector(`[data-i="${k}"]`).classList.add("matched"));
+            flipped = []; update();
+            if(matched.size===set.length){ balloons(14,c); info.textContent = `🎉 全部配对成功！用了 ${moves} 步`; }
+          } else {
+            locked = true;
+            const f = flipped.slice();
+            setTimeout(()=>{ f.forEach(k=>{ const e=grid.querySelector(`[data-i="${k}"]`); if(e && !e.classList.contains("matched")) e.classList.remove("open"); }); flipped=[]; locked=false; }, 750);
+          }
+        }
+        update();
+      });
+    });
+    update();
+    document.getElementById("match-restart").onclick = ()=> renderMatch(c);
+  }
+
+  // 🎯 闯关：四选一，选出单词的中文意思
+  function renderQuiz(c){
+    const set = sampleWords(10);
+    if(set.length===0){ c.innerHTML = `<div class="empty">当前筛选下没有单词～</div>`; return; }
+    let qi=0, score=0;
+    function q(){
+      if(qi>=set.length){
+        c.innerHTML = `<div class="game-head">🎯 闯关结束！</div>
+          <div class="quiz-result">得分 <b>${score}</b> / ${set.length} 🎉</div>
+          <div class="game-foot"><button class="btn btn-primary" id="quiz-again">🔄 再来一局</button></div>`;
+        balloons(12,c);
+        document.getElementById("quiz-again").onclick = ()=> renderQuiz(c);
+        return;
+      }
+      const w = set[qi];
+      const opts = [w.cn];
+      while(opts.length<4){ const d = set[Math.floor(Math.random()*set.length)].cn; if(!opts.includes(d)) opts.push(d); }
+      opts.sort(()=> Math.random() - 0.5);
+      c.innerHTML = `<div class="game-head">🎯 <b>闯关</b>：选出「${esc(w.text)}」的意思（第 ${qi+1}/${set.length} 题）</div>
+        <div class="quiz-word">${esc(w.text)} <button class="mini-btn" id="q-speak">🔊 听</button></div>
+        <div class="quiz-opts">${opts.map(o=>`<button class="quiz-opt" data-o="${esc(o)}">${esc(o)}</button>`).join("")}</div>
+        <div class="game-foot"><span>得分：${score}</span></div>`;
+      c.querySelector("#q-speak").onclick = ()=> speak(w.text,"en-US");
+      const optEls = c.querySelectorAll(".quiz-opt");
+      optEls.forEach(el=> el.onclick = ()=>{
+        if(el.disabled) return;
+        optEls.forEach(x=> x.disabled = true);
+        if(el.dataset.o===w.cn){ el.classList.add("right"); score++; balloons(3,c); }
+        else { el.classList.add("wrong"); optEls.forEach(x=>{ if(x.dataset.o===w.cn) x.classList.add("right"); }); }
+        setTimeout(()=>{ qi++; q(); }, 750);
+      });
+    }
+    q();
+  }
+
+  // ✍️ 拼写：根据中文意思写出英文单词
+  function renderSpell(c){
+    const set = sampleWords(10);
+    if(set.length===0){ c.innerHTML = `<div class="empty">当前筛选下没有单词～</div>`; return; }
+    let i=0, score=0;
+    function step(){
+      if(i>=set.length){
+        c.innerHTML = `<div class="game-head">✍️ 拼写结束！</div>
+          <div class="quiz-result">答对 <b>${score}</b> / ${set.length} ✏️</div>
+          <div class="game-foot"><button class="btn btn-primary" id="spell-again">🔄 再来一局</button></div>`;
+        balloons(12,c);
+        document.getElementById("spell-again").onclick = ()=> renderSpell(c);
+        return;
+      }
+      const w = set[i];
+      c.innerHTML = `<div class="game-head">✍️ <b>拼写</b>：根据中文写出英文（第 ${i+1}/${set.length} 题）</div>
+        <div class="spell-cn">${esc(w.cn)}</div>
+        <div class="spell-phon">${esc(w.phonetic)} <button class="mini-btn" id="s-speak">🔊 听</button></div>
+        <input class="spell-input" id="s-input" placeholder="输入英文单词" autocomplete="off" spellcheck="false">
+        <div class="game-foot"><button class="btn btn-primary" id="s-submit">提交</button><span id="s-info"></span></div>`;
+      const inp = c.querySelector("#s-input");
+      inp.focus();
+      c.querySelector("#s-speak").onclick = ()=> speak(w.text,"en-US");
+      function submit(){
+        const val = (inp.value||"").trim().toLowerCase();
+        if(!val) return;
+        const ok = val === w.text.trim().toLowerCase();
+        const info = c.querySelector("#s-info");
+        if(ok){ score++; info.textContent = "✅ 正确！"; info.style.color = "var(--ok)"; balloons(3,c); }
+        else { info.textContent = "❌ 正确答案：" + w.text; info.style.color = "#d8483b"; }
+        inp.disabled = true; c.querySelector("#s-submit").disabled = true;
+        setTimeout(()=>{ i++; step(); }, 900);
+      }
+      c.querySelector("#s-submit").onclick = submit;
+      inp.addEventListener("keydown", e=>{ if(e.key==="Enter") submit(); });
+    }
+    step();
+  }
+
+  // 🪣 分拣台：把单词拖到「我会了 / 还不会」（手机可点卡片按钮）
+  function renderSort(c){
+    const set = sampleWords(12);
+    if(set.length===0){ c.innerHTML = `<div class="empty">当前筛选下没有单词～</div>`; return; }
+    let remaining = set.slice();
+    let kn=0, dn=0;
+    c.innerHTML = `<div class="game-head">🪣 <b>分拣台</b>：把单词拖到「我会了」或「还不会」——手机可直接点卡片上的按钮</div>
+      <div class="sort-board">
+        <div class="sort-col pile"><h4 class="pile-h">📥 待分拣（<span id="cnt-left">${remaining.length}</span>）</h4><div class="bean-pile" id="bean-pile"></div></div>
+        <div class="sort-col know"><h4>🌟 我会了（<span id="cnt-know">0</span>）</h4><div class="bean-zone" id="zone-know" data-zone="know"></div></div>
+        <div class="sort-col dont"><h4>💪 还不会（<span id="cnt-dont">0</span>）</h4><div class="bean-zone" id="zone-dont" data-zone="dont"></div></div>
+      </div>`;
+    const pileEl = c.querySelector("#bean-pile");
+    const zk = c.querySelector("#zone-know"), zd = c.querySelector("#zone-dont");
+    function pileHtml(){ return remaining.map(w=>`
+      <div class="bean" draggable="true" data-key="${w.key}">
+        <div class="bean-word">${esc(w.text)}</div>
+        <div class="bean-cn">${esc(w.cn)}</div>
+        <div class="bean-acts"><button class="mini-btn ok" data-act="know">会✔</button><button class="mini-btn no" data-act="dont">不会✕</button></div>
+      </div>`).join(""); }
+    function wireBeans(){
+      pileEl.querySelectorAll(".bean").forEach(b=>{
+        b.addEventListener("dragstart", e=> e.dataTransfer.setData("text/plain", b.dataset.key));
+        b.querySelectorAll(".bean-acts button").forEach(btn=> btn.addEventListener("click", e=>{ e.stopPropagation(); move(b.dataset.key, btn.dataset.act==="know"?"know":"dont"); }));
+      });
+    }
+    function move(key, to){
+      const idx = remaining.findIndex(x=>x.key===key); if(idx<0) return;
+      const w = remaining[idx]; remaining.splice(idx,1);
+      const chip = document.createElement("div"); chip.className="bean-chip"; chip.textContent=w.text;
+      if(to==="know"){ learnItem(key); kn++; c.querySelector("#cnt-know").textContent=kn; (zk).appendChild(chip); balloons(2,c); }
+      else { dn++; c.querySelector("#cnt-dont").textContent=dn; (zd).appendChild(chip); }
+      c.querySelector("#cnt-left").textContent = remaining.length;
+      pileEl.innerHTML = pileHtml(); wireBeans();
+      if(remaining.length===0){ balloons(14,c); toast("分拣完成！"); }
+    }
+    [zk,zd].forEach(z=>{
+      z.addEventListener("dragover", e=>{ e.preventDefault(); z.classList.add("over"); });
+      z.addEventListener("dragleave", ()=> z.classList.remove("over"));
+      z.addEventListener("drop", e=>{ e.preventDefault(); z.classList.remove("over"); move(e.dataTransfer.getData("text/plain"), z.dataset.zone); });
+    });
+    pileEl.innerHTML = pileHtml(); wireBeans();
+  }
+
+  // 🗂️ 归类：把单词拖进它所属的「年级 / 单元」罐子
+  function renderClassify(c){
+    const pool = wordsFiltered();
+    if(pool.length===0){ c.innerHTML = `<div class="empty">当前筛选下没有单词～</div>`; return; }
+    // 自适应维度：年级多于 1 个就按“年级”归类，否则按“单元”归类
+    const grades = uniq(pool,"grade");
+    const dim = grades.length>1 ? "grade" : "unit";
+    const freq = {}; pool.forEach(w=> freq[w[dim]]=(freq[w[dim]]||0)+1);
+    const jars = Object.keys(freq).sort((a,b)=> freq[b]-freq[a]).slice(0,6);
+    let set = sampleWords(12).filter(w=> jars.includes(w[dim]));
+    if(set.length<6) set = pool.filter(w=> jars.includes(w[dim])).slice(0,12);
+    if(set.length===0){ c.innerHTML = `<div class="empty">没有可归类的单词，换个筛选试试～</div>`; return; }
+    c.innerHTML = `<div class="game-head">🗂️ <b>归类</b>：把单词拖进它所属的「${dim==="grade"?"年级":"单元"}」罐子（手机可点卡片上的按钮）</div>
+      <div class="classify-pool" id="cf-pool">${set.map(w=>`
+        <div class="bean" draggable="true" data-key="${w.key}" data-dim="${esc(w[dim])}">
+          <div class="bean-word">${esc(w.text)}</div><div class="bean-cn">${esc(w.cn)}</div>
+          <div class="bean-acts">${jars.map(j=>`<button class="mini-btn" data-g="${esc(j)}">${esc(j)}</button>`).join("")}</div>
+        </div>`).join("")}</div>
+      <div class="classify-jars">${jars.map(j=>`<div class="jar" data-jar="${esc(j)}"><h4>${esc(j)}</h4><div class="jar-body"></div></div>`).join("")}</div>`;
+    const poolEl = c.querySelector("#cf-pool");
+    let done = 0;
+    function jarEl(j){ return c.querySelector('.jar[data-jar="'+j.replace(/"/g,'\\"')+'"]'); }
+    function check(w, j, beanEl){
+      if(w[dim]===j){
+        const je = jarEl(j);
+        const chip = document.createElement("div"); chip.className="bean-chip"; chip.textContent=w.text;
+        je.querySelector(".jar-body").appendChild(chip);
+        beanEl.remove(); done++;
+        balloons(2,c);
+        if(done===set.length){ balloons(14,c); toast("🎉 全部归好类啦！"); }
+      } else {
+        toast("再想想，「"+w.text+"」其实属于 "+w[dim]);
+        beanEl.classList.add("shake"); setTimeout(()=> beanEl.classList.remove("shake"), 500);
+      }
+    }
+    poolEl.querySelectorAll(".bean").forEach(b=>{
+      const w = set.find(x=>x.key===b.dataset.key);
+      b.addEventListener("dragstart", e=> e.dataTransfer.setData("text/plain", b.dataset.key));
+      b.querySelectorAll(".bean-acts button").forEach(btn=> btn.addEventListener("click", e=>{ e.stopPropagation(); check(w, btn.dataset.g, b); }));
+    });
+    c.querySelectorAll(".jar").forEach(jar=>{
+      jar.addEventListener("dragover", e=>{ e.preventDefault(); jar.classList.add("over"); });
+      jar.addEventListener("dragleave", ()=> jar.classList.remove("over"));
+      jar.addEventListener("drop", e=>{ e.preventDefault(); jar.classList.remove("over"); const key=e.dataTransfer.getData("text/plain"); const b=poolEl.querySelector('.bean[data-key="'+key+'"]'); const w=set.find(x=>x.key===key); if(w) check(w, jar.dataset.jar, b); });
+    });
   }
 
   /* ============ 详情弹窗 + 视频 ============ */
@@ -437,7 +754,7 @@
         </div>
         <div class="legend">保存后该条目优先播放你选的视频；抖音等不支持内嵌的会自动用「打开」按钮。进度已随账号本地保存。</div>
       </details>`;
-    const video = `<div class="video-box">
+    let video = `<div class="video-box">
         <h4>🎬 视频讲解（辅助学习）</h4>
         ${savedHtml}
         ${addForm}
@@ -449,6 +766,7 @@
         </details>
       </div>`;
 
+    if(cat==='words') video='';   // 单词靠拼写/释义练习，不需要视频
     let actions="";
     if(st==="new"){
       actions = `<button class="btn btn-primary" id="m-learn">✓ 我学会了（打卡）</button>`;
