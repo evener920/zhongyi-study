@@ -756,13 +756,15 @@
     const q = videoQuery(cat, item);
     const yt = "https://www.youtube.com/embed?listType=search&list="+encodeURIComponent(q);
     const bili = "https://search.bilibili.com/all?keyword="+encodeURIComponent(q);
-    const saved = state.videos[key];
+    const defVideo = (window.DEFAULT_VIDEOS && window.DEFAULT_VIDEOS[key]) || "";
+    const saved = state.videos[key] || defVideo;
+    const isUserVideo = !!state.videos[key];
     let savedHtml = "";
     if(saved){
       const emb = videoEmbed(saved);
       savedHtml = `<div class="saved-video">
-          <div class="sv-head"><span>📺 我的视频 ${emb.type==='iframe'?'（已内嵌播放）':'（点击打开）'}</span>
-            <button class="mini-btn sv-del" id="m-vdel">删除</button></div>
+          <div class="sv-head"><span>${isUserVideo?'📺 我的视频':'📺 推荐视频'} ${emb.type==='iframe'?'（已内嵌播放）':'（点击打开）'}</span>
+            ${isUserVideo?'<button class="mini-btn sv-del" id="m-vdel">删除</button>':''}</div>
           ${emb.type==='iframe'
             ? `<div class="video-frame"><iframe src="${emb.src}" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`
             : `<a class="bili-btn" href="${esc(saved)}" target="_blank" rel="noopener">▶ 打开视频（抖音 / 其他平台）</a>`}
