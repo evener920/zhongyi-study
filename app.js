@@ -15,6 +15,7 @@
   state.checkins = state.checkins || {};
   state.items = state.items || {};
   state.videos = state.videos || {};
+  state.gallery = state.gallery || []; // 成语动画廊：用户自添加的成语卡
   state.settings = state.settings || { dailyGoal: 15 };
 
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -876,14 +877,105 @@
     reader.readAsText(file);
   }
 
+  /* ============ 成语动画廊（添加成语卡 + 单独播放视频） ============ */
+  let galleryOpen = null; // 当前正在播放的卡片 id（保证一次只播一个）
+
+  function withAutoplay(src){
+    // 若已有 autoplay 参数（如 B站内嵌默认 autoplay=0），先统一成 1，再补一个
+    src = src.replace(/([?&]autoplay=)[01]/, "$1"+"1");
+    if(/[?&]autoplay=/.test(src)) return src;
+    const sep = src.indexOf("?")>=0 ? "&" : "?";
+    return src + sep + "autoplay=1";
+  }
+
+  function renderGallery(){
+    const v = document.getElementById("view-gallery");
+    // 卡片来源：① 已有的 270 个成语里“保存过视频”的；② 用户自己添加的
+    const idiomCards = D.idioms.filter(x=> state.videos[x.key])
+      .map(x=>({ id:x.key, kind:"idiom", word:x.word, explanation:x.explanation, url:state.videos[x.key] }));
+    const customCards = (state.gallery||[]).map(c=>({ id:"g"+c.id, kind:"custom", word:c.word, explanation:c.explanation, url:c.url, cid:c.id }));
+    const cards = idiomCards.concat(customCards);
+
+    const cardHtml = (c)=>{
+      const emb = videoEmbed(c.url);
+      const playing = galleryOpen===c.id;
+      let player = "";
+      if(playing){
+        player = emb.type==="iframe"
+          ? `<div class="gplayer"><iframe src="${esc(withAutoplay(emb.src))}" allow="encrypted-media; picture-in-picture; autoplay" allowfullscreen></iframe></div>`
+          : `<a class="bili-btn" href="${esc(c.url)}" target="_blank" rel="noopener">▶ 打开视频（抖音 / 其他平台，不支持内嵌）</a>`;
+      }
+      const playBtn = playing
+        ? `<button class="mini-btn" data-act="close">收起</button>`
+        : `<button class="mini-btn" data-act="play">▶ 播放</button>`;
+      const delBtn = c.kind==="custom"
+        ? `<button class="mini-btn sv-del" data-act="del">删除</button>`
+        : `<button class="mini-btn sv-del" data-act="unlink">移除视频</button>`;
+      return `<div class="gcard" data-id="${esc(c.id)}" data-cid="${c.cid||""}">
+        <div class="gcard-head"><span class="gterm">${esc(c.word)}</span>${delBtn}</div>
+        <div class="gexpl">${esc((c.explanation||"").slice(0,60))}</div>
+        <div class="gcard-foot">
+          <button class="mini-btn" data-act="speak">🔊</button>
+          ${playBtn}
+        </div>
+        ${player}
+      </div>`;
+    };
+
+    v.innerHTML = `
+      <div class="panel" style="margin-bottom:16px">
+        <h3>🎬 成语动画廊</h3>
+        <p class="section-desc">把喜欢的成语动画收集成卡片，点「播放」单独看，互不打扰；也能自己添加成语卡。</p>
+        <button class="btn btn-primary" id="g-add-toggle">➕ 添加成语卡</button>
+        <div class="gallery-add" id="g-add-form" hidden>
+          <div class="ga-row"><label>成语</label><input id="g-word" placeholder="如：画蛇添足"></div>
+          <div class="ga-row"><label>解释(选填)</label><input id="g-exp" placeholder="一句话解释"></div>
+          <div class="ga-row"><label>视频链接</label><input id="g-url" placeholder="B站 / 抖音 / YouTube 链接"></div>
+          <div class="ga-actions">
+            <button class="btn btn-primary" id="g-save">保存卡片</button>
+            <button class="btn btn-ghost" id="g-cancel">取消</button>
+          </div>
+          <div class="legend">B站 BV 链接会内嵌播放；抖音等不支持内嵌的会给出“打开”按钮。进度保存在本浏览器。</div>
+        </div>
+      </div>
+      <div class="grid gallery-grid">${cards.length ? cards.map(cardHtml).join("") : `<div class="empty">还没有卡片，点上方“添加成语卡”开始收集吧～</div>`}</div>`;
+
+    const cnt = document.getElementById("cnt-gallery"); if(cnt) cnt.textContent = cards.length;
+
+    v.querySelector("#g-add-toggle").onclick = ()=>{ const f=v.querySelector("#g-add-form"); f.hidden=!f.hidden; };
+    v.querySelector("#g-cancel").onclick = ()=>{ v.querySelector("#g-add-form").hidden=true; };
+    v.querySelector("#g-save").onclick = ()=>{
+      const word=v.querySelector("#g-word").value.trim();
+      const exp=v.querySelector("#g-exp").value.trim();
+      const url=v.querySelector("#g-url").value.trim();
+      if(!word || !url){ toast("请填写成语和视频链接"); return; }
+      state.gallery = state.gallery||[];
+      state.gallery.push({ id:Date.now(), word, explanation:exp, url });
+      save(); galleryOpen=null; toast("已添加成语卡 🎉"); renderGallery();
+    };
+
+    v.querySelectorAll(".gcard").forEach(cardEl=>{
+      const id = cardEl.dataset.id;
+      cardEl.querySelectorAll("[data-act]").forEach(b=> b.onclick = ()=>{
+        const act=b.dataset.act;
+        if(act==="play"){ galleryOpen=id; renderGallery(); }
+        else if(act==="close"){ galleryOpen=null; renderGallery(); }
+        else if(act==="speak"){ const c=cards.find(x=>x.id===id); speak((c.word||"")+"。"+(c.explanation||""),"zh-CN"); }
+        else if(act==="del"){ const cid=cardEl.dataset.cid; state.gallery=state.gallery.filter(x=>String(x.id)!==String(cid)); save(); galleryOpen=null; toast("已删除卡片"); renderGallery(); }
+        else if(act==="unlink"){ delete state.videos[id]; save(); galleryOpen=null; toast("已移除该成语的视频"); renderGallery(); }
+      });
+    });
+  }
+
   /* ============ 导航 ============ */
   function switchView(v){
     document.querySelectorAll(".nav-btn").forEach(x=> x.classList.toggle("active", x.dataset.view===v));
-    ["home","poems","words","idioms","stats"].forEach(x=>{ document.getElementById("view-"+x).hidden = (x!==v); });
+    ["home","poems","words","idioms","gallery","stats"].forEach(x=>{ document.getElementById("view-"+x).hidden = (x!==v); });
     if(v==="home") renderHome();
     else if(v==="poems") renderModule("poems");
     else if(v==="words") renderModule("words");
     else if(v==="idioms") renderModule("idioms");
+    else if(v==="gallery") renderGallery();
     else if(v==="stats") renderStats();
   }
   document.querySelectorAll(".nav-btn").forEach(b=> b.onclick = ()=> switchView(b.dataset.view));

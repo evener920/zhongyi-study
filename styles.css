@@ -237,3 +237,21 @@ button{font-family:inherit;cursor:pointer}
 .jar h4{margin:0 0 8px;font-size:14px;text-align:center;color:var(--word)}
 .jar.over{outline:3px dashed var(--word);outline-offset:-4px;background:#eafaf4}
 .jar-body{display:flex;flex-wrap:wrap}
+
+/* ============ 成语动画廊 ============ */
+.gallery-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.gcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow)}
+.gcard-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gterm{font-size:20px;font-weight:800}
+.gcard-head .sv-del{border-color:#d8483b;color:#d8483b}
+.gcard-head .sv-del:hover{background:#ffe9e6}
+.gexpl{font-size:13px;color:var(--muted);min-height:18px;line-height:1.5}
+.gcard-foot{display:flex;gap:8px;margin-top:2px}
+.gcard-foot .mini-btn{flex:0 0 auto}
+.gplayer{margin-top:6px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:16/9}
+.gplayer iframe{width:100%;height:100%;border:0;display:block}
+.gallery-add{margin-top:14px;border:1px dashed var(--line);border-radius:14px;padding:14px;background:#fafbfe}
+.gallery-add .ga-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.gallery-add .ga-row label{flex:0 0 84px;font-size:13px;color:var(--muted);font-weight:600}
+.gallery-add .ga-row input{flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;background:#fff}
+.gallery-add .ga-actions{display:flex;gap:10px;margin:4px 0 8px}
